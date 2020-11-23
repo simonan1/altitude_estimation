@@ -1,0 +1,37 @@
+<!-- Launches: droneVSLandingROSModule -->
+<launch>
+	
+	<arg name="drone_id_namespace"  default="drone3" />
+	<arg name="drone_id_int" 	  		default="3" />
+	<!-- <arg name="my_stack_directory" 	default="$(env AEROSTACK_STACK)" /> -->
+
+	<group ns="$(arg drone_id_namespace)">
+	<node name="droneAltitudeFiltering" pkg="droneAltitudeFiltering" 
+              type="droneAltitudeFiltering" output="screen">
+			<param name="droneId" value="$(arg drone_id_int)" type="int"/>
+            <remap from="points2" to="velodyne_points"/>
+            <remap from="odom" to="odometry/filtered"/>
+			<!-- <param name="stackPath" value="$(arg my_stack_directory)" type="string"/> -->
+	</node>
+
+
+
+	</group>
+</launch>
+
+<!--topics that the node is subscribed to:
+"/px4flow/raw/px4Flow_pose_z", 1, &DroneAltitudeFiltering::droneLidarCallbackSim,
+"lightware_altitude",1, &DroneAltitudeFiltering::droneLidarCallbackReal, this);
+"mavros/imu/data",1,&DroneAltitudeFiltering::droneImuCallback, this);
+"rotation_angles",1, &DroneAltitudeFiltering::droneRotationAnglesCallback, this);
+"mavros/imu/atm_pressure",1,&DroneAltitudeFiltering::droneAtmPressureCallback, th
+"mavros/imu/temperature",1,&DroneAltitudeFiltering::droneTemperatureCallback, thi
+"mavros/altitude",1, &DroneAltitudeFiltering::droneMavrosAltitudeCallback, this);
+"status",1, &DroneAltitudeFiltering::droneStatusCallback, this);  
+
+n.advertise<geometry_msgs::PoseStamped>("altitudeFiltered", 1, t
+n.advertise<geometry_msgs::PoseStamped>("altitudeBarometer",1, t
+n.advertise<geometry_msgs::PoseStamped>("objectHeightEstimated",
+n.advertise<geometry_msgs::PoseStamped>("objectHeight",1, true);
+n.advertise<geometry_msgs::PoseStamped>("accelerations",1,true);
+n.advertise<std_msgs::Float64>("mahalonobis_distance",1, true); -->
