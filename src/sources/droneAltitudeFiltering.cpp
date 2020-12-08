@@ -59,6 +59,8 @@ void DroneAltitudeFiltering::open(ros::NodeHandle & nIn)
     droneObjectHeightPub     = n.advertise<geometry_msgs::PoseStamped>("objectHeight",1, true);
     droneAccelerationsPub	 = n.advertise<geometry_msgs::PoseStamped>("accelerations",1,true);
     droneMahaDistancePub     = n.advertise<std_msgs::Float64>("mahalonobis_distance",1, true);
+    dronePeakCounterPub      = n.advertise<std_msgs::Float64>("peakCounterLidarCb",1, true);
+
 
     init();
 
@@ -353,6 +355,8 @@ bool DroneAltitudeFiltering::run()
 
     altitudeData.header.stamp       = ros::Time::now();
     altitudeData.pose.position.z    = x_kk(0,0);
+    altitudeData.pose.position.x    = x_kk(6,0); // Simona for debug - baro bias
+    altitudeData.pose.position.y    = x_kk(7,0); // Simona for debug - accel
     if(altitudeData.pose.position.z < 0) altitudeData.pose.position.z = 0;
 
     droneAltitudePub.publish(altitudeData);
@@ -378,6 +382,7 @@ bool DroneAltitudeFiltering::run()
 
 void DroneAltitudeFiltering::OpenModel()
 {
+    ROS_INFO("%s", "In  DroneAltitudeFiltering::OpenModel");
     //Filling the process model x_kk
     x_kk(0,0) = 0.0;    //altitude
     x_kk(1,0) = 0;    //velocity
@@ -402,7 +407,7 @@ void DroneAltitudeFiltering::OpenModel()
     T(2,2) = 0.1; // az
     T(3,3) = 0.0; // pitch
     T(4,4) = 0.01; // wy
-    T(5,5) = 10.00; // z_map
+    T(5,5) = 10.00; // z_map // Simona it was 10.00
     T(6,6) = 0.05; // b_bar
     T(7,7) = 0.01; // b_accz
     T(8,8) = 0.0;  //roll
@@ -431,6 +436,7 @@ void DroneAltitudeFiltering::droneLidarCallbackSim( const geometry_msgs::PoseSta
 
 void DroneAltitudeFiltering::droneLidarCallbackReal(const sensor_msgs::Range &msg)
 {
+    //ROS_INFO("%s", "In droneLidarCallbackReal");
     //setting the measurement flag to true;
     this->measurement_activation[0]=true;
     //this->measurement_activation[5]=false;
@@ -504,6 +510,10 @@ void DroneAltitudeFiltering::droneLidarCallbackReal(const sensor_msgs::Range &ms
         objectHeightData.header.stamp    = ros::Time::now();
         objectHeightData.pose.position.z = object_height;
         droneObjectHeightPub.publish(objectHeightData);
+
+        std_msgs::Float64 dronePeakCounter;
+        dronePeakCounter.data = peak_counter;
+        dronePeakCounterPub.publish(dronePeakCounter);
     }
 
     //run();
@@ -540,7 +550,7 @@ void DroneAltitudeFiltering::droneLidarCallbackReal(const sensor_msgs::Range &ms
 
 void DroneAltitudeFiltering::droneImuCallback(const sensor_msgs::Imu &msg)
 {
-
+    ROS_INFO("%s", "In ------------droneImuCallback-------------");
     //setting the measurement flag to true;
     this->measurement_activation[1]=true;
     //setting the measurement flag to true;
@@ -591,7 +601,7 @@ void DroneAltitudeFiltering::droneImuCallback(const sensor_msgs::Imu &msg)
 
 void DroneAltitudeFiltering::droneRotationAnglesCallback(const geometry_msgs::Vector3Stamped &msg)
 {
-
+    ROS_INFO("%s", "********In droneRotationAnglesCallback******************");
     //measurement flag for pitch angle
     this->measurement_activation[4]=true;
     //measurement flag for roll angle
@@ -618,6 +628,7 @@ void DroneAltitudeFiltering::droneAtmPressureCallback(const sensor_msgs::FluidPr
 {
 
     atm_pressure = msg.fluid_pressure;
+    //ROS_INFO("%s", "In  droneAtmPressureCallback");
 
     //       Pb = 101325;    % [Pa]
     //       hb = 0;         % [m]
@@ -662,7 +673,7 @@ void DroneAltitudeFiltering::droneAtmPressureCallback(const sensor_msgs::FluidPr
     //		}
 
     //		barometerData.header.stamp       	= ros::Time::now();
-    //   	barometerData.pose.position.z 		= barometer_height;
+    //   	barometerData.pose.position.z 		= ;
     //    droneBarometerHeightPub.publish(barometerData);
     //cout << "barometer_height" << barometer_height << endl;
 
@@ -671,6 +682,7 @@ void DroneAltitudeFiltering::droneAtmPressureCallback(const sensor_msgs::FluidPr
 
 void DroneAltitudeFiltering::droneTemperatureCallback(const sensor_msgs::Temperature &msg)
 {
+    //ROS_INFO("%s", "In droneTemperatureCallback");
     temperature = msg.temperature;
     //cout << "temperature" << temperature << endl;
     return;
@@ -678,7 +690,7 @@ void DroneAltitudeFiltering::droneTemperatureCallback(const sensor_msgs::Tempera
 
 void DroneAltitudeFiltering::droneMavrosAltitudeCallback(const mavros_msgs::Altitude &msg)
 {
-
+    ROS_INFO("%s", "In ------------droneMavrosAltitudeCallback -------------");
     this->measurement_activation[3]=true;
 
 //    //calculating the deltaT
@@ -704,7 +716,8 @@ void DroneAltitudeFiltering::droneMavrosAltitudeCallback(const mavros_msgs::Alti
         //cout << "first barometer height " << first_barometer_height << endl;
         //cout << "first lidar height"      << first_measured_lidar_altitude << endl;
         //cout << "barometer_height - first_barometer_height " << msg.local - first_barometer_height << endl;
-        barometer_height = msg.local;//first_measured_lidar_altitude + (msg.local - first_barometer_height);
+        //barometer_height = msg.local;//first_measured_lidar_altitude + (msg.local - first_barometer_height);
+          barometer_height =  msg.amsl; // changed by Simona
 //    }
 
     barometerData.header.stamp       	= ros::Time::now();

@@ -135,6 +135,7 @@ protected:
     ros::Publisher droneObjectHeightPub;
     ros::Publisher droneAccelerationsPub;
     ros::Publisher droneMahaDistancePub;
+    ros::Publisher dronePeakCounterPub;
 
 public:
     bool run();

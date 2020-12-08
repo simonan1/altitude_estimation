@@ -42,7 +42,7 @@ set(DRONE_ALTITUDE_FILTERING_HEADER_FILES
 
 
 find_package(catkin REQUIRED
-                COMPONENTS roscpp  droneMsgsROS droneModuleROS std_msgs mavros_msgs)
+                COMPONENTS roscpp  droneMsgsROS droneModuleROS std_msgs mavros_msgs tf2 tf2_ros)
 
 
 catkin_package(
@@ -68,8 +68,10 @@ target_link_libraries(droneAltitudeFiltering_lib ${catkin_LIBRARIES})
 
 
 add_executable(droneAltitudeFiltering ${DRONE_ALTITUDE_FILTERING_SOURCE_DIR}/droneAltitudeFilteringNode.cpp)
+add_executable(convert_rot_ang_node ${DRONE_ALTITUDE_FILTERING_SOURCE_DIR}/convert_rot_ang_node.cpp)
+
 add_dependencies(droneAltitudeFiltering ${catkin_EXPORTED_TARGETS})
 target_link_libraries(droneAltitudeFiltering droneAltitudeFiltering_lib)
 target_link_libraries(droneAltitudeFiltering ${catkin_LIBRARIES})
-
+target_link_libraries(convert_rot_ang_node ${catkin_LIBRARIES})
 

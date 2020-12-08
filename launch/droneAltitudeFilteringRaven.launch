@@ -1,33 +1,43 @@
-<!-- Launches: droneVSLandingROSModule -->
+<!-- Launches: droneVSLandingROSModule 
+roslaunch droneAltitudeFiltering droneAltitudeFilteringRaven.launch bag_filename:=${HOME}/catkin_he/bagfiles/simona_2_0.bag-->
 <launch>
-	
+	<param name="/use_sim_time" value="true" />
 	<arg name="drone_id_namespace"  default="drone3" />
 	<arg name="drone_id_int" 	  		default="3" />
 	<!-- <arg name="my_stack_directory" 	default="$(env AEROSTACK_STACK)" /> -->
 
 	<group ns="$(arg drone_id_namespace)">
+	<node name="convert_rot_ang_node" pkg="droneAltitudeFiltering" 
+              type="convert_rot_ang_node" output="screen">
+	</node>
 	<node name="droneAltitudeFiltering" pkg="droneAltitudeFiltering" 
               type="droneAltitudeFiltering" output="screen">
 			<param name="droneId" value="$(arg drone_id_int)" type="int"/>
-            <remap from="points2" to="velodyne_points"/>
-            <remap from="odom" to="odometry/filtered"/>
+			<!-- <remap from="/px4flow/raw/px4Flow_pose_z" to="/mavros/distance_sensor/hrlv_ez4_pub/"/> -->
+            <remap from="lightware_altitude" to="/mavros/distance_sensor/hrlv_ez4_pub/"/>
+			<remap from ="/drone3/mavros/imu/data" to ="/mavros/imu/data"/>
+            <remap from="/drone3/rotation_angles" to="/rotation_angles"/>  -->
+			<remap from="/drone3/mavros/imu/data/orientation" to="/mavros/imu/data/orientation"/>
+			<remap from="mavros/imu/atm_pressure" to="/mavros/imu/static_pressure"/>         <!--  sensor_msgs/FluidPressure  -->
+   			<remap from="mavros/imu/temperature" to="/mavros/imu/temperature_imu"/>          <!--  sensor_msgs/Temperature  -->
+			<remap from ="/drone3/mavros/altitude" to="/mavros/altitude"/>    
 			<!-- <param name="stackPath" value="$(arg my_stack_directory)" type="string"/> -->
 	</node>
-
-
-
+	
 	</group>
 </launch>
+
+
 
 <!--topics that the node is subscribed to:
 "/px4flow/raw/px4Flow_pose_z", 1, &DroneAltitudeFiltering::droneLidarCallbackSim,
 "lightware_altitude",1, &DroneAltitudeFiltering::droneLidarCallbackReal, this);
-"mavros/imu/data",1,&DroneAltitudeFiltering::droneImuCallback, this);
+"VVV - mavros/imu/data",1,&DroneAltitudeFiltering::droneImuCallback, this);
 "rotation_angles",1, &DroneAltitudeFiltering::droneRotationAnglesCallback, this);
-"mavros/imu/atm_pressure",1,&DroneAltitudeFiltering::droneAtmPressureCallback, th
-"mavros/imu/temperature",1,&DroneAltitudeFiltering::droneTemperatureCallback, thi
-"mavros/altitude",1, &DroneAltitudeFiltering::droneMavrosAltitudeCallback, this);
-"status",1, &DroneAltitudeFiltering::droneStatusCallback, this);  
+"mavros/imu/atm_pressure",1,&DroneAltitudeFiltering::droneAtmPressureCallback, NOT USED
+"mavros/imu/temperature",1,&DroneAltitudeFiltering::droneTemperatureCallback, NOT USED
+"VVV - mavros/altitude",1, &DroneAltitudeFiltering::droneMavrosAltitudeCallback, this);
+"status",1, &DroneAltitudeFiltering::droneStatusCallback, this); NOT USED 
 
 n.advertise<geometry_msgs::PoseStamped>("altitudeFiltered", 1, t
 n.advertise<geometry_msgs::PoseStamped>("altitudeBarometer",1, t
