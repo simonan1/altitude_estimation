@@ -7,7 +7,7 @@ ros::Publisher rot_publisher ;
 
 void imuRecievedCallback(const sensor_msgs::Imu::ConstPtr& msg)
 {
-  ROS_INFO("I heard: [%lf]", msg->orientation.x);
+  // ROS_INFO("I heard: [%lf]", msg->orientation.x);
   //convert to yaw, pitch, roll
   double yaw, pitch, roll;
   tf::Quaternion q(msg->orientation.x,msg->orientation.y,msg->orientation.z,msg->orientation.w);

@@ -58,8 +58,10 @@
 #define ALTITUDE_THRESHOLD 0.10
 #define OBJECT_THRESHOLD 0.20
 #define ACCELERATIONS_COUNT 80
+#define RANGE_DIFF_THRESHOLD 12.0
 
 
+int HIGH_DIFF_RANGE_COUNTER = 0;
 const double Pressure_sea_level = 101325;
 
 class DroneAltitudeFiltering: public DroneModule
@@ -78,6 +80,7 @@ public:
     geometry_msgs::PoseStamped objectHeightEstData;
     geometry_msgs::PoseStamped objectHeightData;
     geometry_msgs::PoseStamped accelerationData;
+    geometry_msgs::PoseStamped sensorsEnable4Debug;
 
     void droneLidarCallbackSim(const geometry_msgs::PoseStamped& msg);
     void droneLidarCallbackReal(const sensor_msgs::Range &msg);
@@ -135,7 +138,10 @@ protected:
     ros::Publisher droneObjectHeightPub;
     ros::Publisher droneAccelerationsPub;
     ros::Publisher droneMahaDistancePub;
+    ros::Publisher droneLidarInnPub;
     ros::Publisher dronePeakCounterPub;
+    ros::Publisher droneDiffRangePub;
+    ros::Publisher droneSensorsEnablePub;
 
 public:
     bool run();

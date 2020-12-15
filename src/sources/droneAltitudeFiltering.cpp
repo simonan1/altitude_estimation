@@ -59,7 +59,10 @@ void DroneAltitudeFiltering::open(ros::NodeHandle & nIn)
     droneObjectHeightPub     = n.advertise<geometry_msgs::PoseStamped>("objectHeight",1, true);
     droneAccelerationsPub	 = n.advertise<geometry_msgs::PoseStamped>("accelerations",1,true);
     droneMahaDistancePub     = n.advertise<std_msgs::Float64>("mahalonobis_distance",1, true);
+    droneLidarInnPub         = n.advertise<std_msgs::Float64>("lidarInnovation",1, true);
     dronePeakCounterPub      = n.advertise<std_msgs::Float64>("peakCounterLidarCb",1, true);
+    droneDiffRangePub      = n.advertise<std_msgs::Float64>("droneDiffRangeb",1, true);
+    droneSensorsEnablePub = n.advertise<geometry_msgs::PoseStamped>("measEnable", 1, true);
 
 
     init();
@@ -103,6 +106,7 @@ bool DroneAltitudeFiltering::init()
 
 
     measuredAltitude       = 0;
+    lastMeasuredAltitude   = 0;
     linear_acceleration_z  = 0;
     avg_linear_acceleration_z = 0;
     angular_velocity       = 0;
@@ -208,7 +212,7 @@ bool DroneAltitudeFiltering::run()
     timeNow = (double) ros::Time::now().sec + ((double) ros::Time::now().nsec / (double) 1E9);
 
     deltaT   = timeNow - timePrev;
-    cout << "deltaT " << deltaT << endl;
+    // cout << "deltaT " << deltaT << endl;
 
     //Filling in the process jacobian
     F(0,0) = 1.0;
@@ -220,21 +224,19 @@ bool DroneAltitudeFiltering::run()
     F(3,3) = 1.0;
     F(3,4) = 1.0*deltaT;
     F(4,4) = 1.0;
-    cout << "x_kk(5) " << x_kk(5,0);
-    cout << "abs(x_kk(5)) " << abs(x_kk(5,0)) << endl;
-    if(x_kk(5,0) <= 0.10)
-    F(5,5) = 0;
-    else
-    F(5,5) = (x_kk(5,0)/abs(x_kk(5,0)));
+    // cout << "x_kk(5) " << x_kk(5,0);
+    // cout << "abs(x_kk(5)) " << abs(x_kk(5,0)) << endl;
+    // if(x_kk(5,0) <= 0.10) Simona
+    // F(5,5) = 0; Simona
+    // else Simona
+    F(5,5) = 1.0; // Simona was (x_kk(5,0)/abs(x_kk(5,0)));
     F(6,6) = 1.0;
     F(7,7) = 1.0;
     F(8,8) = 1.0;
     F(8,9) = 1.0*deltaT;
     F(9,9) = 1.0;
 
-    //Prediction stage
-    x_k1k           = F*x_kk;
-    p_k1k           = F*p_kk*(F.transpose().eval())+ T*deltaT;
+    
 
     //Update stage
     Eigen::VectorXd z_est_k;
@@ -259,6 +261,9 @@ bool DroneAltitudeFiltering::run()
     R_enabled.setZero();
     double dis_mahala;
 
+    std_msgs::Float64 droneLidarInnovation;
+    int big_range_innovation = 0;
+
     for(int num_meas_i=0, num_enabled_meas_i=0; num_meas_i<MEASUREMENT_STATE; num_meas_i++)
     {
         if(this->measurement_activation[num_meas_i]==true)
@@ -272,6 +277,12 @@ bool DroneAltitudeFiltering::run()
                 H_enabled(num_enabled_meas_i,5) = -1.0/cos(x_kk(3,0))*cos(x_kk(3,0));
                 H_enabled(num_enabled_meas_i,8) = (x_kk(0,0) - x_kk(5,0))*sin(x_kk(8,0))/cos(x_kk(8,0));
                 v(num_enabled_meas_i) = measuredAltitude      - z_est_k(num_enabled_meas_i,0);
+                cout << "v(num_enabled_meas_i)= " << v(num_enabled_meas_i) << endl;
+                droneLidarInnovation.data = v(num_enabled_meas_i);
+                droneLidarInnPub.publish(droneLidarInnovation);
+                if (abs(v(num_enabled_meas_i)) > 0.2 ){
+                    big_range_innovation = 5;
+                }
                 break;
             case 1:// imu_az
                 z_est_k(num_enabled_meas_i)=  x_kk(2,0) + x_kk(7,0);
@@ -306,6 +317,8 @@ bool DroneAltitudeFiltering::run()
                 v(num_enabled_meas_i)  = angular_velocity_x   - z_est_k(num_enabled_meas_i,0);
             }
 
+            R(0,0) = (big_range_innovation > 0) ? 10.0:0.0004;
+
             R_enabled(num_enabled_meas_i, num_enabled_meas_i)=R(num_meas_i,num_meas_i);
 
             num_enabled_meas_i++;
@@ -314,14 +327,32 @@ bool DroneAltitudeFiltering::run()
 
     }
 
-    //    std::cout<<"R_enabled"<<std::endl;
-    //    std::cout<<R_enabled<<std::endl;
+    //    std::cout<<"v"<<std::endl; std::cout<<v<<std::endl;
 
-    //    std::cout<<"H_enabled"<<std::endl;
-    //    std::cout<<H_enabled<<std::endl;
+    //Prediction stage
+    // if (HIGH_DIFF_RANGE_COUNTER > 0){
+    //     T(5,5) = 50000.0;
+    //     R(0,0) = 10.0;
+    //     HIGH_DIFF_RANGE_COUNTER -= 1;
+    //     cout << "HIGH_DIFF_RANGE_FLAG positive"  << HIGH_DIFF_RANGE_COUNTER << endl;
+    // }
+    // else{
+    //     T(5,5) = 0.01;
+    //     R(0,0) = 0.004;
+    // }
 
-    //    std::cout<<"v"<<std::endl;
-    //    std::cout<<v<<std::endl;
+    if (big_range_innovation > 0){
+        T(5,5) = 50000.0;
+       // R(0,0) = 10.0;
+        big_range_innovation -= 1;
+    }
+    else{
+        T(5,5) = 0.01;
+       // R(0,0) = 0.004;
+    }
+
+    x_k1k           = F*x_kk;
+    p_k1k           = F*p_kk*(F.transpose().eval())+ T*deltaT;
 
 
     //Innovation (or residual) covariance
@@ -351,17 +382,33 @@ bool DroneAltitudeFiltering::run()
     // }
 
     //cout << "Dist maha" << dis_mahala << endl;
-    cout << "x_kk " << x_kk << endl;
+    // cout << "x_kk " << x_kk << endl;
+
+
+    sensorsEnable4Debug.header.stamp = ros::Time::now();
+    sensorsEnable4Debug.pose.position.z    = (this->measurement_activation[0]==true) ? 1:0;
+    sensorsEnable4Debug.pose.position.x    = (this->measurement_activation[1]==true) ? 1:0;
+    sensorsEnable4Debug.pose.position.y    = (this->measurement_activation[2]==true) ? 1:0;
+    sensorsEnable4Debug.pose.orientation.x = (this->measurement_activation[3]==true) ? 1:0;
+    sensorsEnable4Debug.pose.orientation.y = (this->measurement_activation[4]==true) ? 1:0;
+    sensorsEnable4Debug.pose.orientation.z = (this->measurement_activation[5]==true) ? 1:0;
+    sensorsEnable4Debug.pose.orientation.w = (this->measurement_activation[6]==true) ? 1:0;
+    droneSensorsEnablePub.publish(sensorsEnable4Debug);
 
     altitudeData.header.stamp       = ros::Time::now();
     altitudeData.pose.position.z    = x_kk(0,0);
     altitudeData.pose.position.x    = x_kk(6,0); // Simona for debug - baro bias
     altitudeData.pose.position.y    = x_kk(7,0); // Simona for debug - accel
-    if(altitudeData.pose.position.z < 0) altitudeData.pose.position.z = 0;
+    //if(altitudeData.pose.position.z < 0) altitudeData.pose.position.z = 0;
 
     droneAltitudePub.publish(altitudeData);
 
     objectHeightEstData.header.stamp = ros::Time::now();
+    objectHeightEstData.pose.orientation.x = p_kk(5,5); // Simona for debug - uncertainty in obj height
+    objectHeightEstData.pose.orientation.y = p_kk(0,0); // Simona for debug - uncertainty in altitude
+    objectHeightEstData.pose.orientation.z = p_kk(0,5); // Simona for debug - cov altitude & obj height
+    objectHeightEstData.pose.position.x = x_kk(3,0); // Simona for debug - pitch
+    objectHeightEstData.pose.position.y = x_kk(8,0);  // Simona for debug - roll
     objectHeightEstData.pose.position.z = x_kk(5,0);
 
     droneEstObjectHeightPub.publish(objectHeightEstData);
@@ -407,7 +454,7 @@ void DroneAltitudeFiltering::OpenModel()
     T(2,2) = 0.1; // az
     T(3,3) = 0.0; // pitch
     T(4,4) = 0.01; // wy
-    T(5,5) = 10.00; // z_map // Simona it was 10.00
+    T(5,5) = 10.00; // z_map
     T(6,6) = 0.05; // b_bar
     T(7,7) = 0.01; // b_accz
     T(8,8) = 0.0;  //roll
@@ -418,9 +465,9 @@ void DroneAltitudeFiltering::OpenModel()
     R(0,0) = 0.004;                           // altitude by lidar
     R(1,1) = 0.06;							// accelerations by the imu
     R(2,2) = 0.0027;                        // angular velocity by imu
-    R(3,3) = 0.004;                          // alitude by barometer
-    R(4,4) = 0.35;						   // pitch angle
-    R(5,5) = 0.35;                           //roll angle
+    R(3,3) = 0.04;                          // alitude by barometer Simona -  was 0.004; 
+    R(4,4) = 0.05;						   // pitch angle   Simona - was 0.35;
+    R(5,5) = 0.05;                           //roll angle   Simona - was 0.35;
     R(6,6) = 0.0027;
     return;
 }
@@ -442,18 +489,32 @@ void DroneAltitudeFiltering::droneLidarCallbackReal(const sensor_msgs::Range &ms
     //this->measurement_activation[5]=false;
 
     //calculating the deltaT
-//    timePrev = timeNow;
-//    timeNow = (double) ros::Time::now().sec + ((double) ros::Time::now().nsec / (double) 1E9);
-//    deltaT   = timeNow - timePrev;
-
-
+    timePrev = timeNow;
+    timeNow = (double) ros::Time::now().sec + ((double) ros::Time::now().nsec / (double) 1E9);
+    
+    lastMeasuredAltitude = measuredAltitude;
     measuredAltitude = msg.range;
 
-    if(measuredAltitude > 1.5 && x_kk(5,0) <= 0)
-    {
-        counter = 0;
-        //cout << "Resetting the Altitude Filter " << endl;
+    float diff_measuredAltitude = (measuredAltitude - lastMeasuredAltitude)/(timeNow - timePrev);
+    std_msgs::Float64 tmp;
+    tmp.data = abs(diff_measuredAltitude);
+    
+    droneDiffRangePub.publish(tmp);
+    if ((abs(diff_measuredAltitude) > RANGE_DIFF_THRESHOLD) && (abs(diff_measuredAltitude) < 100.0)) {
+        HIGH_DIFF_RANGE_COUNTER = 5;
+        // T(5,5) = 100.00; // z_map
+        
+        cout << "------ threshold reached, diff_measuredAltitude = " << diff_measuredAltitude << " ." << endl;
     }
+    // else {
+        // T(5,5) = 1.0; // z_map
+    // }
+
+    //if(measuredAltitude > 1.5 && x_kk(5,0) <= 0)
+    //{
+    //    counter = 0;
+        //cout << "Resetting the Altitude Filter " << endl;
+    //}
 
     //if(x_kk(5,0) < 0 && x_kk(0,0) - measuredAltitude > 0.20)
     //{
@@ -550,7 +611,7 @@ void DroneAltitudeFiltering::droneLidarCallbackReal(const sensor_msgs::Range &ms
 
 void DroneAltitudeFiltering::droneImuCallback(const sensor_msgs::Imu &msg)
 {
-    ROS_INFO("%s", "In ------------droneImuCallback-------------");
+    // ROS_INFO("%s", "In ------------droneImuCallback-------------");
     //setting the measurement flag to true;
     this->measurement_activation[1]=true;
     //setting the measurement flag to true;
@@ -601,7 +662,7 @@ void DroneAltitudeFiltering::droneImuCallback(const sensor_msgs::Imu &msg)
 
 void DroneAltitudeFiltering::droneRotationAnglesCallback(const geometry_msgs::Vector3Stamped &msg)
 {
-    ROS_INFO("%s", "********In droneRotationAnglesCallback******************");
+    // ROS_INFO("%s", "********In droneRotationAnglesCallback******************");
     //measurement flag for pitch angle
     this->measurement_activation[4]=true;
     //measurement flag for roll angle
@@ -690,7 +751,7 @@ void DroneAltitudeFiltering::droneTemperatureCallback(const sensor_msgs::Tempera
 
 void DroneAltitudeFiltering::droneMavrosAltitudeCallback(const mavros_msgs::Altitude &msg)
 {
-    ROS_INFO("%s", "In ------------droneMavrosAltitudeCallback -------------");
+    // ROS_INFO("%s", "In ------------droneMavrosAltitudeCallback -------------");
     this->measurement_activation[3]=true;
 
 //    //calculating the deltaT
